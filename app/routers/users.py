@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Response, status,HTTPException,Depends,APIRouter
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..import models,schemas,utils
+from ..import models,schemas,utils,outh2
 
 router=APIRouter(
     prefix="/users",
@@ -23,6 +23,11 @@ def get_all_user(db:Session= Depends(get_db)):
     users=db.query(models.User).all()
     return users
 
+@router.get("/me",response_model=schemas.UserCreate)
+def get_current_user_info(current_user: models.User=Depends(outh2.get_current_user)):
+
+    return  current_user
+
 @router.get("/{id}", response_model=schemas.UserResponse)
 def get_Users(id: int,db:Session= Depends(get_db)):
     user=db.query(models.User).filter(models.User.id==id).first()
@@ -32,6 +37,7 @@ def get_Users(id: int,db:Session= Depends(get_db)):
                              detail=f"post with id: {id} does not exist")
     
     return user
+
 
 @router.delete("/{id}",status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(id:int,db:Session=Depends(get_db)):
