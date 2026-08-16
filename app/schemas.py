@@ -28,7 +28,7 @@ class BookResponse(BaseModel):
     author:str
     isbn: str
     quantity:int
-    available:str
+    available:int
 
     model_config =ConfigDict(from_attributes=True)
 
