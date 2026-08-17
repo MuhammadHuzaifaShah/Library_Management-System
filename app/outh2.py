@@ -52,3 +52,20 @@ def get_current_user(token:str=Depends(outh2_scheme),db:Session=Depends(database
         raise credentials_exception
     
     return user 
+
+
+def get_current_admin(token:str=Depends(outh2_scheme),db:Session=Depends(database.get_db)):
+    credentials_exception=HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                                        detail=f"could Not Validate Credentials",
+                                        headers={"WWW-Authenticate": "Bearer"},)
+
+    token=verify_access_token(token,credentials_exception) 
+    admin=db.query(models.User).filter(models.User.id==token.id).first()
+
+    if admin is None:
+        raise credentials_exception
+
+    if not admin.isadmin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,detail=f"Only Admin can Access")
+    
+    return admin

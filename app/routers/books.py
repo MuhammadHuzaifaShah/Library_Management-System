@@ -9,7 +9,7 @@ router=APIRouter(
 )
 
 @router.post("/", status_code=status.HTTP_201_CREATED,response_model=schemas.BookResponse)
-def create_book(book:schemas.BookCreate, db:Session= Depends(get_db),current_user:models.User=Depends(outh2.get_current_user)):
+def create_book(book:schemas.BookCreate, db:Session= Depends(get_db),current_user:models.User=Depends(outh2.get_current_admin)):
     existing_book=db.query(models.Book).filter(models.Book.isbn==book.isbn).first()
 
     if existing_book:
@@ -33,7 +33,7 @@ def get_all_books(db:Session= Depends(get_db),current_user: models.User = Depend
 
 
 @router.get("/{id}", response_model=schemas.BookResponse)
-def get_book(id: int,db:Session= Depends(get_db),current_user: models.User = Depends(outh2.get_current_user)):
+def get_book(id: int,db:Session= Depends(get_db),current_user: models.User = Depends(outh2.get_current_admin)):
     book=db.query(models.Book).filter(models.Book.id==id).first()
     
     if not book:
@@ -43,15 +43,16 @@ def get_book(id: int,db:Session= Depends(get_db),current_user: models.User = Dep
     return book
 
 @router.put("/{id}",response_model=schemas.BookResponse)
-def update_book(id: int, book: schemas.BookCreate,db:Session= Depends(get_db)):
+def update_book(id: int, book: schemas.BookCreate,db:Session= Depends(get_db),current_user: models.User = Depends(outh2.get_current_admin)):
+
+    book_query=db.query(models.Book).filter(models.Book.id==id).first()
+    
     existing_book=db.query(models.Book).filter(models.Book.isbn==book.isbn,models.Book.id !=id).first()
     if existing_book:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"ISBN {book.isbn} already belong to another one"
         )
-
-    book_query=db.query(models.Book).filter(models.Book.id==id).first()
 
     if book_query==None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
@@ -69,7 +70,7 @@ def update_book(id: int, book: schemas.BookCreate,db:Session= Depends(get_db)):
 
 
 @router.delete("/{id}",status_code=status.HTTP_204_NO_CONTENT)
-def delete_book(id:int,db:Session=Depends(get_db)):
+def delete_book(id:int,db:Session=Depends(get_db),current_user: models.User = Depends(outh2.get_current_admin)):
     book=db.query(models.Book).filter(models.Book.id==id).first()
     
 
