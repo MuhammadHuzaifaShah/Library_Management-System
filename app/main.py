@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from app.database import engine
 from app import models
-from .routers import users,auth,books
+from .routers import users,auth,books,borrowings
 
 
 models.Base.metadata.create_all(bind=engine)
@@ -13,6 +13,7 @@ app = FastAPI()
 app.include_router(users.router)
 app.include_router(auth.router)
 app.include_router(books.router)
+app.include_router(borrowings.router)
 
 
 @app.get("/")

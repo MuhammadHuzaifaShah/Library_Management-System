@@ -24,7 +24,8 @@ class Book(Base):
     isbn = Column(String, nullable=False, unique=True)
     author=Column(String,nullable=False)
     quantity=Column(Integer,default=1)
-    available=Column(Integer,default=1)
+    available=Column(Boolean,default=True)
+    available_quantity=Column(Integer,default=1)
     created_at=Column(TIMESTAMP(timezone=True),
                       nullable=False,server_default=text('now()'))
 
