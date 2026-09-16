@@ -1,71 +1,42 @@
-from jose import JWTError,jwt
-from datetime import datetime,timedelta
-from . import schemas,database,models
-from fastapi import Depends,status,HTTPException
+"""JWT authentication (module name retained for existing imports)."""
+from datetime import datetime, timedelta, timezone
+
+from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
+
+from . import database, models, schemas
 from .config import settings
 
-outh2_scheme=OAuth2PasswordBearer(tokenUrl="login")
+outh2_scheme = OAuth2PasswordBearer(tokenUrl='login')
 
-#security Key
-#Algorithem
-#Expriation time
-
-SECRET_KEY = settings.secret_key
-ALGORITHM = settings.algorithm
-ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
 
 def create_access_token(data: dict):
+    payload = data.copy()
+    payload['exp'] = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
+    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
-    to_encode=data.copy()
-    expire=datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
- 
-    encoded_jwt=jwt.encode(to_encode,SECRET_KEY,algorithm=ALGORITHM)
 
-    return encoded_jwt
-
-def verify_access_token(token:str ,credentials_exception):
+def verify_access_token(token: str, credentials_exception):
     try:
-        payload=jwt.decode(token,SECRET_KEY,algorithms=[ALGORITHM])
-
-        user_id=payload.get("user_id")
-
-        if user_id is None:
-            raise credentials_exception
-        token_data = schemas.TokenData(id=user_id)
-    except JWTError:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm], options={'require_exp': True})
+        return schemas.TokenData(id=payload.get('user_id'))
+    except (JWTError, ValidationError, TypeError, ValueError):
         raise credentials_exception
-    
-    return token_data
-    
-def get_current_user(token:str=Depends(outh2_scheme),db:Session=Depends(database.get_db)):
-    credentials_exception=HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                                        detail=f"could Not Validate Credentials",
-                                        headers={"WWW-Authenticate": "Bearer"},)
 
-    token=verify_access_token(token,credentials_exception) 
-    user=db.query(models.User).filter(models.User.id==token.id).first()
 
+def get_current_user(token: str = Depends(outh2_scheme), db: Session = Depends(database.get_db)):
+    error = HTTPException(status_code=401, detail='Could not validate credentials', headers={'WWW-Authenticate': 'Bearer'})
+    token_data = verify_access_token(token, error)
+    user = db.get(models.User, token_data.id)
     if user is None:
-        raise credentials_exception
-    
-    return user 
+        raise error
+    return user
 
 
-def get_current_admin(token:str=Depends(outh2_scheme),db:Session=Depends(database.get_db)):
-    credentials_exception=HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                                        detail=f"could Not Validate Credentials",
-                                        headers={"WWW-Authenticate": "Bearer"},)
-
-    token=verify_access_token(token,credentials_exception) 
-    admin=db.query(models.User).filter(models.User.id==token.id).first()
-
-    if admin is None:
-        raise credentials_exception
-
-    if not admin.isadmin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,detail=f"Only Admin can Access")
-    
-    return admin
+def get_current_admin(current_user: models.User = Depends(get_current_user)):
+    if not current_user.isadmin:
+        raise HTTPException(status_code=403, detail='Administrator access required')
+    return current_user

@@ -1,36 +1,25 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import text
-from app.database import engine
-from app import models
-from .routers import users,auth,books,borrowings
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+from .database import get_db
+from .routers import users, auth, books, borrowings
+
+app = FastAPI(title='Library Management API', version='1.0.0', description='Books, members, and lending with JWT authentication.')
+for router in (users.router, auth.router, books.router, borrowings.router):
+    app.include_router(router)
 
 
-models.Base.metadata.create_all(bind=engine)
-
-
-app = FastAPI()
-
-app.include_router(users.router)
-app.include_router(auth.router)
-app.include_router(books.router)
-app.include_router(borrowings.router)
-
-
-@app.get("/")
+@app.get('/')
 def root():
-    return {"message": "Library Management API is running"}
+    return {'message': 'Library Management API is running'}
 
 
-@app.get("/test_db")
-def test_db():
+@app.get('/health', tags=['health'])
+@app.get('/test_db', include_in_schema=False)
+def health(db: Session = Depends(get_db)):
     try:
-        with engine.connect() as connection:
-            connection.execute(text("Select 1"))
-
-        return {"message":"Conected successfully"}
-
-    except Exception as e:
-        return {
-            "message": "Database connection failed",
-            "error": str(e)
-        }
+        db.execute(text('SELECT 1'))
+    except SQLAlchemyError:
+        raise HTTPException(status_code=503, detail='Database unavailable')
+    return {'status': 'ok'}

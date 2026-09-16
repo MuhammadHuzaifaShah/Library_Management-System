@@ -1,84 +1,69 @@
-from fastapi import FastAPI, Response, status,HTTPException,Depends,APIRouter
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..import models,schemas,utils,outh2
+from .. import models, schemas, utils, outh2
 
-router=APIRouter(
-    prefix="/books",
-    tags=['books']
-)
-
-@router.post("/", status_code=status.HTTP_201_CREATED,response_model=schemas.BookResponse)
-def create_book(book:schemas.BookCreate, db:Session= Depends(get_db),current_user:models.User=Depends(outh2.get_current_admin)):
-    existing_book=db.query(models.Book).filter(models.Book.isbn==book.isbn).first()
-
-    if existing_book:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Book with this isbn already exists"
-        )
-    
-    new_book=models.Book(**book.model_dump())
-    db.add(new_book)
-    db.commit()
-    db.refresh(new_book)
-
-    return new_book
+router = APIRouter(prefix='/books', tags=['books'])
 
 
-@router.get("/",response_model=list[schemas.BookResponse])
-def get_all_books(db:Session= Depends(get_db),current_user: models.User = Depends(outh2.get_current_user)):
-    books=db.query(models.Book).all()
-    return books
+@router.post('/', status_code=201, response_model=schemas.BookResponse)
+def create_book(book: schemas.BookCreate, db: Session = Depends(get_db), current_user=Depends(outh2.get_current_admin)):
+    record = models.Book(**book.model_dump(), available_quantity=book.quantity, available=book.quantity > 0)
+    db.add(record)
+    utils.commit(db, 'ISBN is already registered')
+    db.refresh(record)
+    return record
 
 
-@router.get("/{id}", response_model=schemas.BookResponse)
-def get_book(id: int,db:Session= Depends(get_db),current_user: models.User = Depends(outh2.get_current_admin)):
-    book=db.query(models.Book).filter(models.Book.id==id).first()
-    
-    if not book:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                             detail=f"Book with id: {id} does not exist")
-    
+@router.get('/', response_model=list[schemas.BookResponse])
+def get_all_books(db: Session = Depends(get_db), current_user=Depends(outh2.get_current_user),
+                  search: str | None = Query(None, max_length=255), author: str | None = Query(None, max_length=255),
+                  available: bool | None = None, skip: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100)):
+    query = db.query(models.Book)
+    if search:
+        query = query.filter(or_(models.Book.title.icontains(search, autoescape=True),
+                                 models.Book.author.icontains(search, autoescape=True),
+                                 models.Book.isbn.icontains(search, autoescape=True)))
+    if author:
+        query = query.filter(models.Book.author.icontains(author, autoescape=True))
+    if available is not None:
+        query = query.filter(models.Book.available == available)
+    return query.order_by(models.Book.id).offset(skip).limit(limit).all()
+
+
+@router.get('/{id}', response_model=schemas.BookResponse)
+def get_book(id: int, db: Session = Depends(get_db), current_user=Depends(outh2.get_current_admin)):
+    book = db.get(models.Book, id)
+    if book is None:
+        raise HTTPException(status_code=404, detail='Book not found')
     return book
 
-@router.put("/{id}",response_model=schemas.BookResponse)
-def update_book(id: int, book: schemas.BookCreate,db:Session= Depends(get_db),current_user: models.User = Depends(outh2.get_current_admin)):
 
-    book_query=db.query(models.Book).filter(models.Book.id==id).first()
-    
-    existing_book=db.query(models.Book).filter(models.Book.isbn==book.isbn,models.Book.id !=id).first()
-    if existing_book:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"ISBN {book.isbn} already belong to another one"
-        )
-
-    if book_query==None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                             detail=f"Book with id: {id} does not exist")
-    
-    book_query.title=book.title
-    book_query.author=book.author
-    book_query.isbn=book.isbn
-    book_query.quantity=book.quantity
-
-    db.commit()
-    db.refresh(book_query)
-
-    return  book_query
+@router.put('/{id}', response_model=schemas.BookResponse)
+def update_book(id: int, book: schemas.BookCreate, db: Session = Depends(get_db), current_user=Depends(outh2.get_current_admin)):
+    record = db.query(models.Book).filter(models.Book.id == id).with_for_update().first()
+    if record is None:
+        raise HTTPException(status_code=404, detail='Book not found')
+    borrowed = record.quantity - record.available_quantity
+    if book.quantity < borrowed:
+        raise HTTPException(status_code=409, detail='Quantity cannot be lower than the number of borrowed copies')
+    for key, value in book.model_dump().items():
+        setattr(record, key, value)
+    record.available_quantity = book.quantity - borrowed
+    record.available = record.available_quantity > 0
+    utils.commit(db, 'ISBN is already registered')
+    db.refresh(record)
+    return record
 
 
-@router.delete("/{id}",status_code=status.HTTP_204_NO_CONTENT)
-def delete_book(id:int,db:Session=Depends(get_db),current_user: models.User = Depends(outh2.get_current_admin)):
-    book=db.query(models.Book).filter(models.Book.id==id).first()
-    
-
-    if book==None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                             detail=f"Book with id: {id} does not exist")
-    
+@router.delete('/{id}', status_code=204)
+def delete_book(id: int, db: Session = Depends(get_db), current_user=Depends(outh2.get_current_admin)):
+    book = db.query(models.Book).filter(models.Book.id == id).with_for_update().first()
+    if book is None:
+        raise HTTPException(status_code=404, detail='Book not found')
+    if db.query(models.Borrowing).filter(models.Borrowing.book_id == id).first():
+        raise HTTPException(status_code=409, detail='Books with borrowing history cannot be deleted')
     db.delete(book)
-    db.commit()
-
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    utils.commit(db)
+    return Response(status_code=204)

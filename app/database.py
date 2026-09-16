@@ -1,23 +1,23 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = "postgresql://postgres:Huz123Shah@localhost:5432/library_management"
+from .config import settings
 
-
-engine = create_engine(DATABASE_URL)
-
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
+DATABASE_URL = settings.sqlalchemy_url
+engine = create_engine(
+    DATABASE_URL, pool_pre_ping=True,
+    connect_args={'check_same_thread': False} if str(DATABASE_URL).startswith('sqlite') else {},
 )
 
+if engine.dialect.name == 'sqlite':
+    @event.listens_for(engine, 'connect')
+    def enable_foreign_keys(connection, _):
+        connection.execute('PRAGMA foreign_keys=ON')
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
 def get_db():
-    db = SessionLocal()
-    try:
+    with SessionLocal() as db:
         yield db
-    finally:
-        db.close()

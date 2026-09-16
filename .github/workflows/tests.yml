@@ -1,0 +1,41 @@
+name: Backend tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: library
+          POSTGRES_PASSWORD: test-password
+          POSTGRES_DB: library_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      SECRET_KEY: ci-only-secret-key-at-least-32-characters
+      DATABASE_URL: postgresql+psycopg2://library:test-password@localhost:5432/library_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: SQLite API and migration tests
+        run: python -m pytest -q
+      - name: PostgreSQL API and concurrency tests
+        run: python -m pytest -q tests/test_api.py tests/test_concurrency.py
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg2://library:test-password@localhost:5432/library_test
+      - name: PostgreSQL migration round trip
+        run: |
+          alembic upgrade head
+          alembic check
+          alembic downgrade base
+          alembic upgrade head

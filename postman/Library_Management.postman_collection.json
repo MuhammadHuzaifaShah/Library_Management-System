@@ -1,0 +1,349 @@
+{
+  "info": {
+    "name": "Library Management API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Set credentials locally. Register, then promote that email using python -m app.manage create-admin before admin requests."
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "email",
+      "value": "member@example.com"
+    },
+    {
+      "key": "password",
+      "value": ""
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "book_id",
+      "value": ""
+    },
+    {
+      "key": "borrowing_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/health",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Request succeeds\", function () { pm.expect(pm.response.code).to.be.within(200, 299); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Register member",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/users/",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Member\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Request succeeds\", function () { pm.expect(pm.response.code).to.be.within(200, 299); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{base_url}}/login",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "username",
+              "value": "{{email}}",
+              "type": "text"
+            },
+            {
+              "key": "password",
+              "value": "{{password}}",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Request succeeds\", function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+              "if (pm.response.code < 300) pm.collectionVariables.set(\"token\", pm.response.json().access_token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "My profile",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/users/me",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Request succeeds\", function () { pm.expect(pm.response.code).to.be.within(200, 299); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create book (admin)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/books/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Python Basics\",\n  \"author\": \"Shah\",\n  \"isbn\": \"demo-{{$timestamp}}\",\n  \"quantity\": 3\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Request succeeds\", function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+              "if (pm.response.code < 300) pm.collectionVariables.set(\"book_id\", pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search books",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/books/?search=Python&available=true&limit=20&skip=0",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Request succeeds\", function () { pm.expect(pm.response.code).to.be.within(200, 299); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Borrow book",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/borrowings/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"book_id\": \"{{book_id}}\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Request succeeds\", function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+              "if (pm.response.code < 300) pm.collectionVariables.set(\"borrowing_id\", pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "My active loans",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/borrowings/my?returned=false",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Request succeeds\", function () { pm.expect(pm.response.code).to.be.within(200, 299); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Return book",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "url": "{{base_url}}/borrowings/{{borrowing_id}}/return",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Request succeeds\", function () { pm.expect(pm.response.code).to.be.within(200, 299); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "All loans (admin)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/borrowings/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{token}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Request succeeds\", function () { pm.expect(pm.response.code).to.be.within(200, 299); });"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
