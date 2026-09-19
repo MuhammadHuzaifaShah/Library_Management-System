@@ -1,3 +1,6 @@
+from pathlib import Path
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -10,9 +13,13 @@ for router in (users.router, auth.router, books.router, borrowings.router):
     app.include_router(router)
 
 
-@app.get('/')
+FRONTEND = Path(__file__).resolve().parent / 'frontend'
+app.mount('/assets', StaticFiles(directory=FRONTEND / 'assets'), name='assets')
+
+
+@app.get('/', include_in_schema=False)
 def root():
-    return {'message': 'Library Management API is running'}
+    return FileResponse(FRONTEND / 'index.html')
 
 
 @app.get('/health', tags=['health'])

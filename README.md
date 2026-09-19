@@ -110,3 +110,15 @@ Default tests use disposable SQLite databases, including a fresh migration round
 To test PostgreSQL, create a **separate empty test database**, then set `TEST_DATABASE_URL` to its URL and run `python -m pytest -q`. The test suite creates and drops application tables in that database. Never point it at a database containing data you need. GitHub Actions runs the suite on SQLite and PostgreSQL and verifies PostgreSQL migration upgrades/downgrades.
 
 Import `postman/Library_Management.postman_collection.json` into Postman for a guided register → login → create book → borrow → return sequence. Set its email/password variables locally. Run the admin provisioning command for the registered email before trying admin requests. The collection captures token, book ID, and borrowing ID from responses automatically.
+
+## Leaf frontend
+
+The homepage now serves Leaf, a responsive library interface. Run the existing FastAPI server and open `/` for the frontend; `/docs` remains available for API documentation. No Node build or separate frontend hosting is required.
+
+Members can register, sign in, search/filter the catalog, view book details, borrow available copies, and return their loans. Administrators also get book creation/editing/deletion, all borrowing activity, and the member directory. All data is loaded from the existing authenticated endpoints on the same origin. Login tokens are kept in session storage and are cleared on sign-out. The logged-out reading picks are explicitly illustrative and are never inserted into the database.
+
+Deploy the updated repository to the existing Vercel project. Keep the root directory at `./` and the framework preset at FastAPI. Existing environment variables and database migrations are unchanged. The frontend assets are in `app/frontend/`; the API serves CSS and JavaScript at `/assets/` and HTML at `/`. Typography uses Google Fonts with local fallback fonts.
+
+![Leaf frontend desktop preview](docs/leaf-preview.png)
+
+The screenshot uses temporary demonstration data. Your deployed interface displays your own library records after sign-in.
